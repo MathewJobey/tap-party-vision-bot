@@ -1,0 +1,14 @@
+path: C:/Users/Mathe/Downloads/tap-party-vision-bot
+train: train/images
+val: train/images
+test: train/images
+
+nc: 6
+names: ['gemini', 'hazard', 'safe', 'safe-pair', 'sequence', 'super_g']
+
+roboflow:
+  workspace: mathew-jobey
+  project: tap-party
+  version: 1
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/mathew-jobey/tap-party/dataset/1
