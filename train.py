@@ -1,7 +1,7 @@
 import torch
 from ultralytics import YOLO
 
-# Part 1: Hardware Setup
+# Detect whether NVIDIA GPU acceleration is available
 if torch.cuda.is_available():
     selected_device = 0
     gpu_name = torch.cuda.get_device_name(0)
@@ -10,12 +10,12 @@ else:
     selected_device = "cpu"
     print("No CUDA GPU detected. Training will run on CPU.")
 
-# Part 2: Model Training Routine
+# Guard execution for Windows multi-processing
 if __name__ == "__main__":
-    # Load the base YOLOv8 Small model
+    # Load the base YOLOv8 Small architecture
     model = YOLO("yolov8s.pt")
 
-    # Start the training process
+    # Start the training cycle on the 258 images
     model.train(
         data="data.yaml",
         epochs=50,

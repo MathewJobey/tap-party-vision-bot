@@ -2,3 +2,5 @@ venv
 __pycache__
 dataset_raw
 weights
+runs
+yolov8s.pt

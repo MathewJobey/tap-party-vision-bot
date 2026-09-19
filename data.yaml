@@ -9,6 +9,6 @@ names: ['gemini', 'hazard', 'safe', 'safe-pair', 'sequence', 'super_g']
 roboflow:
   workspace: mathew-jobey
   project: tap-party
-  version: 1
+  version: 2
   license: CC BY 4.0
-  url: https://universe.roboflow.com/mathew-jobey/tap-party/dataset/1
+  url: https://universe.roboflow.com/mathew-jobey/tap-party/dataset/2
