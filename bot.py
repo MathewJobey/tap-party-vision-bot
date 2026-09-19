@@ -5,7 +5,7 @@ import mss
 import numpy as np
 from ultralytics import YOLO
 
-# 1. High-DPI Awareness so coordinates match physical pixels
+# 1. Enable Windows High-DPI Awareness so coordinates match physical pixels
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(2)
 except Exception:
@@ -37,6 +37,11 @@ SUPER_G_CLASS_ID = 5
 
 SEQUENCE_ORDER = ["blue", "red", "yellow", "green"]
 
+# 5. Timer Configuration
+ROUND_DURATION_SECONDS = 60.0  # Adjust to match your game's total round length (e.g. 60 or 45)
+LAST_SECONDS_THRESHOLD = 5.0   # Trigger spam mode when 5 seconds or less remain
+NORMAL_LOOP_SLEEP = 0.25       # Calm snapshot pause during standard play
+
 # Access Windows user interface API
 user32 = ctypes.windll.user32
 VK_MBUTTON = 0x04  # Middle mouse button code
@@ -55,7 +60,7 @@ def click(x, y):
 
 
 def burst_click(x, y, count=28, delay=0.035):
-    """Sends 28 rapid clicks for Super G while monitoring the emergency stop."""
+    """Sends 28 rapid clicks for Super G while monitoring emergency stop."""
     user32.SetCursorPos(x, y)
     for _ in range(count):
         if is_middle_click_pressed():
@@ -88,13 +93,13 @@ def get_balloon_color(crop_bgr):
         return "red"
 
 def run_bot():
-    print("\n[HEADLESS BOT ACTIVE] Switch to your browser window!")
+    print("\n[BOT READY] Switch to your browser window!")
     print(">>> Press [MIDDLE MOUSE CLICK] at any time to STOP. <<<\n")
     time.sleep(2)
 
-    frame_counter = 0
+    game_start_time = None
+    spam_mode_announced = False
 
-    # Using mss.MSS() resolves the deprecation warning
     with mss.MSS() as sct:
         while True:
             # 1. Emergency stop check
@@ -102,13 +107,25 @@ def run_bot():
                 print("\n[EMERGENCY STOP] Middle mouse button detected!")
                 break
 
-            frame_counter += 1
+            now = time.time()
 
-            # 2. Capture the exact game region
+            # 2. Check how much time is left in the round
+            is_spam_mode = False
+            if game_start_time is not None:
+                elapsed = now - game_start_time
+                remaining = ROUND_DURATION_SECONDS - elapsed
+
+                if remaining <= LAST_SECONDS_THRESHOLD:
+                    is_spam_mode = True
+                    if not spam_mode_announced:
+                        print(f"\n[SPAM MODE ACTIVATED] Final {LAST_SECONDS_THRESHOLD}s! Clicking everything!")
+                        spam_mode_announced = True
+
+            # 3. Capture the exact game region
             screenshot = sct.grab(GAME_REGION)
             frame = cv2.cvtColor(np.array(screenshot), cv2.COLOR_BGRA2BGR)
 
-            # 3. Run YOLO detection
+            # 4. Run YOLO detection
             results = model.predict(
                 source=frame, device=0, conf=0.45, verbose=False
             )
@@ -118,17 +135,22 @@ def run_bot():
             sequence_balloons = []
             pair_targets = []
             standard_targets = []
+            all_non_hazards = []
 
-            # 4. Sort detected items (strictly ignore hazards)
+            # 5. Filter and categorize detected balloons
             for box in result.boxes:
                 class_id = int(box.cls[0])
 
+                # Never click hazards under any condition
                 if class_id == HAZARD_CLASS_ID:
                     continue
 
                 x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
                 screen_x = GAME_REGION["left"] + (x1 + x2) // 2
                 screen_y = GAME_REGION["top"] + (y1 + y2) // 2
+
+                # Always add non-hazards to the master list
+                all_non_hazards.append((screen_x, screen_y))
 
                 if class_id == SUPER_G_CLASS_ID:
                     super_g_targets.append((screen_x, screen_y))
@@ -149,58 +171,71 @@ def run_bot():
                         }
                     )
 
-            # 5. Action Execution
-            clicked_count = 0
-
-            # Case A: Super G
-            if super_g_targets:
-                sx, sy = super_g_targets[0]
-                if not burst_click(sx, sy):
-                    print("\n[EMERGENCY STOP] Stopped during Super G burst!")
-                    break
-                clicked_count += 28
-
-            # Case B: Sequence round (exactly 4 balloons found)
-            elif len(sequence_balloons) == 4:
-                for target_color in SEQUENCE_ORDER:
+            # 6. Action Execution Branch
+            if is_spam_mode:
+                # -------------------------------------------------------------
+                # FINAL 5 SECONDS: Rapidly click every single non-hazard target
+                # -------------------------------------------------------------
+                for sx, sy in all_non_hazards:
                     if is_middle_click_pressed():
                         break
-                    for balloon in sequence_balloons:
-                        if balloon["color"] == target_color:
-                            click(balloon["x"], balloon["y"])
-                            clicked_count += 1
-                            time.sleep(0.03)
+                    click(sx, sy)
+                    time.sleep(0.005)  # 5ms ultra-rapid spacing
+
+                # In spam mode, do not sleep 0.25s; immediately take the next snapshot
+                time.sleep(0.010)
+
+            else:
+                # -------------------------------------------------------------
+                # STANDARD PLAY: Clean, paced 0.25-second cycle
+                # -------------------------------------------------------------
+                clicked_something = False
+
+                # Case A: Super G
+                if super_g_targets:
+                    sx, sy = super_g_targets[0]
+                    clicked_something = True
+                    if not burst_click(sx, sy):
+                        print("\n[EMERGENCY STOP] Stopped during Super G burst!")
+                        break
+
+                # Case B: Sequence round
+                elif len(sequence_balloons) == 4:
+                    for target_color in SEQUENCE_ORDER:
+                        if is_middle_click_pressed():
                             break
+                        for balloon in sequence_balloons:
+                            if balloon["color"] == target_color:
+                                click(balloon["x"], balloon["y"])
+                                clicked_something = True
+                                time.sleep(0.03)
+                                break
 
-            # Case C: Safe pairs (exactly 2 balloons found)
-            elif len(pair_targets) == 2:
-                click(pair_targets[0][0], pair_targets[0][1])
-                click(pair_targets[1][0], pair_targets[1][1])
-                clicked_count += 2
+                # Case C: Safe pairs
+                elif len(pair_targets) == 2:
+                    click(pair_targets[0][0], pair_targets[0][1])
+                    click(pair_targets[1][0], pair_targets[1][1])
+                    clicked_something = True
 
-            # Case D: Standard balloons
-            elif standard_targets:
-                standard_targets.sort(
-                    key=lambda item: item["priority"], reverse=True
-                )
-                for target in standard_targets:
-                    if is_middle_click_pressed():
-                        break
-                    click(target["x"], target["y"])
-                    clicked_count += 1
-                    time.sleep(0.02)
+                # Case D: Standard balloons
+                elif standard_targets:
+                    standard_targets.sort(
+                        key=lambda item: item["priority"], reverse=True
+                    )
+                    for target in standard_targets:
+                        if is_middle_click_pressed():
+                            break
+                        click(target["x"], target["y"])
+                        clicked_something = True
+                        time.sleep(0.02)
 
-            # Lightweight console heartbeat (every 4 frames ~= 1 second)
-            if frame_counter % 4 == 0:
-                print(f"[RUNNING] Frame {frame_counter} | Clicks: {clicked_count}")
+                # Start the countdown timer upon the very first click
+                if clicked_something and game_start_time is None:
+                    game_start_time = time.time()
+                    print("[TIMER STARTED] Round timer is running!")
 
-            # Check emergency stop after clicking
-            if is_middle_click_pressed():
-                print("\n[EMERGENCY STOP] Middle mouse button detected!")
-                break
-
-            # 6. Fixed 0.25-second cadence
-            time.sleep(0.25)
+                # Standard 0.25-second snapshot pause
+                time.sleep(NORMAL_LOOP_SLEEP)
 
     print("\n[BOT STOPPED] Exited safely.")
 
