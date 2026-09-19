@@ -5,7 +5,7 @@ import mss
 import numpy as np
 from ultralytics import YOLO
 
-# 1. Load your best trained YOLO weights
+# 1. Load trained YOLO weights
 model_path = r"runs/detect/train/weights/best.pt"
 print(f"Loading custom model from {model_path}...")
 model = YOLO(model_path)
@@ -20,19 +20,24 @@ GAME_REGION = {
 }
 
 # 3. Class IDs from data.yaml
-# 0: gemini, 1: hazard, 2: safe, 3: safe-pair, 4: sequence, 5: super_g
 HAZARD_CLASS_ID = 1
 SEQUENCE_CLASS_ID = 4
 SUPER_G_CLASS_ID = 5
 
-# The exact order required by the sequence mini-game
 SEQUENCE_ORDER = ["blue", "red", "yellow", "green"]
-
-# Standard sleep duration between regular frames (keeps multiplier safe)
 LOOP_SLEEP_SECONDS = 0.2
 
-# Access Windows native mouse controller
+# Access Windows native user interface API
 user32 = ctypes.windll.user32
+
+# Virtual-Key code for the Middle Mouse Button (scroll wheel press)
+VK_MBUTTON = 0x04
+
+
+def is_middle_click_pressed():
+    """Returns True if the mouse wheel button is physically held down."""
+    # 0x8000 checks if the most significant bit is set (meaning button is currently down)
+    return (user32.GetAsyncKeyState(VK_MBUTTON) & 0x8000) != 0
 
 
 def fast_click(screen_x, screen_y):
@@ -43,13 +48,18 @@ def fast_click(screen_x, screen_y):
 
 
 def burst_click(screen_x, screen_y, total_clicks=28, tap_gap=0.003):
-    """Sends a machine-gun burst of clicks at the exact target location."""
+    """Sends rapid clicks, but cancels immediately if middle mouse button is pressed."""
     user32.SetCursorPos(screen_x, screen_y)
     for _ in range(total_clicks):
-        user32.mouse_event(0x0002, 0, 0, 0, 0)  # Press down
-        user32.mouse_event(0x0004, 0, 0, 0, 0)  # Release up
+        # Emergency check inside the rapid burst
+        if is_middle_click_pressed():
+            return False
+
+        user32.mouse_event(0x0002, 0, 0, 0, 0)
+        user32.mouse_event(0x0004, 0, 0, 0, 0)
         if tap_gap > 0:
-            time.sleep(tap_gap)  # 3ms pause so Windows registers every single tap
+            time.sleep(tap_gap)
+    return True
 
 def detect_balloon_color(crop_bgr):
     """Inspects the center pixels of a balloon to determine its color."""
@@ -72,14 +82,19 @@ def detect_balloon_color(crop_bgr):
         return "yellow"
     else:
         return "red"
-
+    
 def run_bot():
     print("\n[BOT ACTIVE] Switch to your browser window!")
-    print("Press 'q' in the preview window to STOP.\n")
+    print(">>> Press [MIDDLE MOUSE CLICK] or 'q' at any time to STOP. <<<\n")
     time.sleep(2)
 
     with mss.mss() as sct:
         while True:
+            # Emergency Stop Check 1: Start of loop
+            if is_middle_click_pressed():
+                print("\n[EMERGENCY STOP] Middle mouse button detected!")
+                break
+
             # 1. Capture the exact game area
             screenshot = sct.grab(GAME_REGION)
             frame = np.array(screenshot)
@@ -99,7 +114,6 @@ def run_bot():
             for box in result.boxes:
                 class_id = int(box.cls[0])
 
-                # Never click hazards
                 if class_id == HAZARD_CLASS_ID:
                     continue
 
@@ -110,7 +124,6 @@ def run_bot():
                 global_x = GAME_REGION["left"] + center_x
                 global_y = GAME_REGION["top"] + center_y
 
-                # Sort by specific balloon task
                 if class_id == SUPER_G_CLASS_ID:
                     super_g_targets.append({"x": global_x, "y": global_y})
                 elif class_id == SEQUENCE_CLASS_ID:
@@ -124,54 +137,64 @@ def run_bot():
                         {
                             "x": global_x,
                             "y": global_y,
-                            "is_priority": class_id == 0,  # Gemini balloon bonus
+                            "is_priority": class_id == 0,
                         }
                     )
 
             # 4. Action Execution
             executed_super_g = False
 
-            # Top Priority: Unleash 28 rapid clicks on Super G
             if super_g_targets:
                 target = super_g_targets[0]
-                # Burst click 28 times with 3ms gap (takes under 0.09s total!)
-                burst_click(target["x"], target["y"], total_clicks=28, tap_gap=0.003)
+                completed = burst_click(
+                    target["x"], target["y"], total_clicks=28, tap_gap=0.003
+                )
+                if not completed:
+                    print("\n[EMERGENCY STOP] Stopped during Super G burst!")
+                    break
                 executed_super_g = True
 
-            # Second Priority: Sequence Mini-game
             elif len(sequence_balloons) >= 3:
                 for target_color in SEQUENCE_ORDER:
+                    if is_middle_click_pressed():
+                        break
                     for balloon in sequence_balloons:
                         if balloon["color"] == target_color:
                             fast_click(balloon["x"], balloon["y"])
                             time.sleep(0.04)
                             break
 
-            # Third Priority: Standard balloons
             elif standard_targets:
                 standard_targets.sort(
                     key=lambda t: t["is_priority"], reverse=True
                 )
                 for target in standard_targets:
+                    if is_middle_click_pressed():
+                        break
                     fast_click(target["x"], target["y"])
                     time.sleep(0.02)
+
+            # Emergency Stop Check 2: After actions
+            if is_middle_click_pressed():
+                print("\n[EMERGENCY STOP] Middle mouse button detected!")
+                break
 
             # 5. Visual Preview
             preview = result.plot()
             cv2.imshow("Tap Party Vision Bot", preview)
 
-            # 6. Sleep control: Only sleep if we did NOT just burst Super G
+            # 6. Sleep control
             if not executed_super_g:
                 time.sleep(LOOP_SLEEP_SECONDS)
             else:
-                # Give a tiny 0.05s pause so the game transitions smoothly
                 time.sleep(0.05)
 
+            # Legacy 'q' key check in case OpenCV preview window has focus
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
 
     cv2.destroyAllWindows()
-    print("\n[BOT STOPPED] Exited safely.")
+    print("[BOT STOPPED] Exited safely.")
 
 
 if __name__ == "__main__":
