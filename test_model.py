@@ -1,7 +1,7 @@
 from ultralytics import YOLO
 
 # Step 1: Load the trained custom model weights
-model_path = r"runs/detect/train-3/weights/best.pt"
+model_path = r"runs/detect/train/weights/best.pt"
 model = YOLO(model_path)
 
 # Step 2: Point to the folder containing your 30 raw screenshots

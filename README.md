@@ -12,9 +12,7 @@
 
 | In-Game Bot Action | YOLO Detection |
 | :---: | :---: |
-| ![Gameplay Demo](assets/demo.gif) | ![YOLO Preview](assets/yolo_detection.png) |
-
-*(Drop your recording into `assets/demo.gif` and detection snapshot into `assets/yolo_detection.png`)*
+| ![Gameplay Demo](assets/demo.gif) | ![YOLO Preview](assets/yolo_detection.jpg) |
 
 ---
 
@@ -65,15 +63,21 @@ venv\Scripts\activate
 pip install -r requirements.txt 
 ```
 
-### 2. Configure Region
+### 2. Configure Region & Dataset Paths
 
-Ensure `GAME_REGION` in `bot.py` matches your browser window position:
+- Update the path in `data.yaml` to match your local project directory.
+- Ensure `GAME_REGION` in `bot.py` matches your browser window position:
 
 ```python
 GAME_REGION = {"left": 650, "top": 100, "width": 620, "height": 915}
 ```
+### 3. Train the Model
+- The dataset is already included in the repository. Train the custom YOLO model locally by running  .
+```Bash
+python train.py
+```
 
-### 3. Run the Bot
+### 4. Run the Bot
 ```bash
 python bot.py
 ```
