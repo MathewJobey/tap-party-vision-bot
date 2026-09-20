@@ -62,4 +62,21 @@ cd tap-party-vision-bot
 
 python -m venv venv
 venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r requirements.txt 
+```
+
+### 2. Configure Region
+
+Ensure `GAME_REGION` in `bot.py` matches your browser window position:
+
+```python
+GAME_REGION = {"left": 650, "top": 100, "width": 620, "height": 915}
+```
+
+### 3. Run the Bot
+```bash
+python bot.py
+```
+⏱️ Switch to your browser within 2 seconds.
+
+🖱️ Press the scroll wheel (Middle Mouse Button) at any time to kill the bot.
