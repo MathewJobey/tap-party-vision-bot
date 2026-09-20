@@ -38,9 +38,9 @@ SUPER_G_CLASS_ID = 5
 SEQUENCE_ORDER = ["blue", "red", "yellow", "green"]
 
 # 5. Timer Configuration
-ROUND_DURATION_SECONDS = 60.0  # Adjust to match your game's total round length (e.g. 60 or 45)
+ROUND_DURATION_SECONDS = 59.0  # Adjust to match your game's total round length (e.g. 60 or 45)
 LAST_SECONDS_THRESHOLD = 5.0   # Trigger spam mode when 5 seconds or less remain
-NORMAL_LOOP_SLEEP = 0.25       # Calm snapshot pause during standard play
+NORMAL_LOOP_SLEEP = 0.20       # Calm snapshot pause during standard play
 
 # Access Windows user interface API
 user32 = ctypes.windll.user32
@@ -59,7 +59,7 @@ def click(x, y):
     user32.mouse_event(0x0004, 0, 0, 0, 0)  # Left up
 
 
-def burst_click(x, y, count=28, delay=0.035):
+def burst_click(x, y, count=28, delay=0.000):
     """Sends 28 rapid clicks for Super G while monitoring emergency stop."""
     user32.SetCursorPos(x, y)
     for _ in range(count):
@@ -180,10 +180,10 @@ def run_bot():
                     if is_middle_click_pressed():
                         break
                     click(sx, sy)
-                    time.sleep(0.005)  # 5ms ultra-rapid spacing
+                    time.sleep(0.000)  # 1ms ultra-rapid spacing
 
                 # In spam mode, do not sleep 0.25s; immediately take the next snapshot
-                time.sleep(0.010)
+                time.sleep(0.01)
 
             else:
                 # -------------------------------------------------------------
